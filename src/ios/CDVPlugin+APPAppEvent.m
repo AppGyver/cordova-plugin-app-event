@@ -29,8 +29,6 @@
 
 @implementation CDVPlugin (APPAppEvent)
 
-static IMP orig_pluginInitialize;
-
 #pragma mark -
 #pragma mark Life Cycle
 
@@ -44,7 +42,7 @@ static IMP orig_pluginInitialize;
     if ([NSStringFromClass(self) isEqualToString:@"APPLocalNotification"]
         || [self conformsToProtocol:@protocol(APPAppEventDelegate)]) {
 
-        orig_pluginInitialize = [self exchange_init_methods];
+        [self exchange_init_methods];
     }
 }
 
@@ -54,12 +52,9 @@ static IMP orig_pluginInitialize;
 /**
  * Registers obervers after plugin was initialized.
  */
-void swizzled_pluginInitialize(id self, SEL _cmd)
+- (void) swizzled_pluginInitialize
 {
-    if (orig_pluginInitialize != NULL) {
-        ((void(*)(id, SEL))orig_pluginInitialize)(self, _cmd);
-        orig_pluginInitialize = NULL;
-    }
+    [self swizzled_pluginInitialize];
 
     [self addObserver:NSSelectorFromString(@"didReceiveLocalNotification:")
                  name:CDVLocalNotification
@@ -81,16 +76,13 @@ void swizzled_pluginInitialize(id self, SEL _cmd)
  * Exchange the method implementations for pluginInitialize
  * and return the original implementation.
  */
-+ (IMP) exchange_init_methods
++ (void) exchange_init_methods
 {
-    IMP swizzleImp = (IMP) swizzled_pluginInitialize;
-    Method origImp = class_getInstanceMethod(self, @selector(pluginInitialize));
+    Method original, swizzled;
 
-    if (method_getImplementation(origImp) != swizzleImp) {
-        return method_setImplementation(origImp, swizzleImp);
-    }
-
-    return NULL;
+    original = class_getInstanceMethod(self, @selector(pluginInitialize));
+    swizzled = class_getInstanceMethod(self, @selector(swizzled_pluginInitialize));
+    method_exchangeImplementations(original, swizzled);
 }
 
 /**
